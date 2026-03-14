@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CheckCircle2, FolderKanban, MessageSquareMore, ShieldCheck } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  FolderKanban,
+  MessageSquareMore,
+  ShieldCheck
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,11 +28,11 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-4 lg:px-6">
-      <div className="mx-auto max-w-[1480px] space-y-6">
-        <header className="panel-surface flex items-center justify-between p-4">
+    <div className="sf-homeRoot">
+      <div className="sf-homeInner space-y-6">
+        <header className="sf-card sf-homeHeader">
           <LogoMark />
-          <div className="flex items-center gap-3">
+          <div className="sf-homeHeaderActions">
             <Button asChild variant="ghost">
               <Link href="/login">Sign in</Link>
             </Button>
@@ -39,31 +45,29 @@ export default async function HomePage() {
           </div>
         </header>
 
-        <section className="panel-surface overflow-hidden p-8 lg:p-12">
-          <div className="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
-            <div className="space-y-8">
+        <section className="sf-card sf-homeHero">
+          <div className="sf-homeGrid lg:items-center">
+            <div className="sf-homeLead">
               <div className="space-y-4">
-                <div className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">
-                  Premium client portal for creative teams
-                </div>
-                <h1 className="max-w-3xl font-serif text-5xl font-semibold leading-tight tracking-tight lg:text-7xl">
+                <div className="sf-homeEyebrow">Premium client portal for creative teams</div>
+                <h1 className="sf-homeTitle">
                   Run onboarding, approvals, revisions, and invoices from one calm workspace.
                 </h1>
-                <p className="max-w-2xl text-lg leading-8 text-muted-foreground">
+                <p className="sf-homeText">
                   StudioFlow replaces scattered email threads with a secure, client-friendly portal
                   built for freelancers, design studios, and agencies that want a more premium way
                   to work.
                 </p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sf-homeHighlights">
                 {highlights.map((item) => (
-                  <div key={item} className="flex items-center gap-3 rounded-2xl bg-secondary/60 px-4 py-3">
+                  <div key={item} className="sf-homeHighlight">
                     <CheckCircle2 className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">{item}</span>
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-3">
+              <div className="sf-homeActions">
                 <Button asChild size="lg">
                   <Link href="/register">Create workspace</Link>
                 </Button>
@@ -72,21 +76,21 @@ export default async function HomePage() {
                 </Button>
               </div>
             </div>
-            <div className="grid gap-4">
+            <div className="sf-homeRail">
               <Card className="bg-gradient-to-br from-primary/10 to-transparent">
                 <CardHeader>
                   <CardTitle>Agency control</CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-3 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-3 rounded-2xl bg-background/80 p-4">
+                <CardContent className="sf-homeFeatureStack text-sm text-muted-foreground">
+                  <div className="sf-homeFeature">
                     <FolderKanban className="h-5 w-5 text-primary" />
                     Projects, files, and approvals stay mapped to the right client.
                   </div>
-                  <div className="flex items-center gap-3 rounded-2xl bg-background/80 p-4">
+                  <div className="sf-homeFeature">
                     <MessageSquareMore className="h-5 w-5 text-primary" />
                     Revision requests stop getting buried in chat threads.
                   </div>
-                  <div className="flex items-center gap-3 rounded-2xl bg-background/80 p-4">
+                  <div className="sf-homeFeature">
                     <ShieldCheck className="h-5 w-5 text-primary" />
                     Supabase Auth, Postgres, Storage, and RLS secure every record.
                   </div>
@@ -97,14 +101,14 @@ export default async function HomePage() {
                   <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     What ships in the MVP
                   </div>
-                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                    <div className="rounded-2xl bg-secondary/60 p-4">
+                  <div className="sf-homeMvpGrid mt-4">
+                    <div className="sf-homeMvpCard">
                       <div className="font-semibold">Agency dashboard</div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         Clients, projects, approvals, invoices, and recent activity.
                       </p>
                     </div>
-                    <div className="rounded-2xl bg-secondary/60 p-4">
+                    <div className="sf-homeMvpCard">
                       <div className="font-semibold">Client portal</div>
                       <p className="mt-2 text-sm text-muted-foreground">
                         Onboarding forms, proposals, deliverables, approvals, revisions, and billing.

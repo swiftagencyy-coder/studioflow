@@ -46,6 +46,8 @@ const ids = {
   invoice01: "90000000-0000-4000-8000-000000000001",
   invoice02: "90000000-0000-4000-8000-000000000002",
   invoice03: "90000000-0000-4000-8000-000000000003",
+  invite01: "a0000000-0000-4000-8000-000000000001",
+  invite02: "a0000000-0000-4000-8000-000000000002",
   onboarding01: "40000000-0000-4000-8000-000000000001",
   onboarding02: "40000000-0000-4000-8000-000000000002",
   project01: "40000000-0000-4000-8000-000000000101",
@@ -156,10 +158,14 @@ async function main() {
   });
 
   await supabase.from("agencies").upsert({
+    brand_primary_color: "#0f766e",
     id: ids.agency,
     name: "Northline Studio",
     owner_user_id: ownerId,
-    slug: "northline-studio"
+    portal_headline: "Everything you need for this engagement, all in one premium portal.",
+    portal_subheadline: "Review deliverables, approve work, submit onboarding, and track billing without digging through email.",
+    slug: "northline-studio",
+    website: "https://northline.studio"
   });
 
   await supabase.from("agency_members").upsert([
@@ -225,6 +231,34 @@ async function main() {
       is_primary: true,
       title: "Marketing lead",
       user_id: clientUserTwoId
+    }
+  ]);
+
+  await supabase.from("workspace_invitations").upsert([
+    {
+      agency_id: ids.agency,
+      email: "ops@northline.demo",
+      expires_at: "2026-04-01T12:00:00Z",
+      full_name: "Jamie Cole",
+      id: ids.invite01,
+      invited_by: ownerId,
+      invited_role: "team_member",
+      status: "pending",
+      title: "Operations manager",
+      token: "invite-team-northline-demo"
+    },
+    {
+      agency_id: ids.agency,
+      client_id: ids.client01,
+      email: "finance@lumencoffee.demo",
+      expires_at: "2026-04-02T12:00:00Z",
+      full_name: "Chris Nolan",
+      id: ids.invite02,
+      invited_by: teamId,
+      invited_role: "client",
+      status: "pending",
+      title: "Finance contact",
+      token: "invite-client-lumen-demo"
     }
   ]);
 

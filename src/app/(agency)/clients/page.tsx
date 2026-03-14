@@ -1,7 +1,7 @@
 import { Users } from "lucide-react";
 
+import { ClientsDirectory } from "@/components/dashboard/clients-directory";
 import { CreateClientDialog } from "@/components/forms/create-client-dialog";
-import { ClientsTable } from "@/components/dashboard/clients-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +23,7 @@ export default async function ClientsPage() {
       <Card>
         <CardContent className="p-0">
           {clients.length ? (
-            <ClientsTable data={clients} />
+            <ClientsDirectory data={clients} />
           ) : (
             <div className="p-6">
               <EmptyState

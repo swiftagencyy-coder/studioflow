@@ -1,9 +1,12 @@
 import Link from "next/link";
 import {
+  BarChart3,
+  CalendarClock,
   CircleCheckBig,
   FilePlus2,
   FolderKanban,
   ReceiptText,
+  TrendingUp,
   Upload,
   Users
 } from "lucide-react";
@@ -20,7 +23,7 @@ import {
   getAgencyClients,
   getAgencyDashboardData
 } from "@/lib/data/studioflow";
-import { formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const viewer = await requireAgencyWorkspace();
@@ -69,6 +72,26 @@ export default async function DashboardPage() {
           value={dashboard.unpaidInvoices}
         />
       </section>
+      <section className="grid gap-4 xl:grid-cols-3">
+        <StatCard
+          description="Invoices currently sent or overdue"
+          icon={TrendingUp}
+          title="Open revenue"
+          value={formatCurrency(dashboard.openRevenue)}
+        />
+        <StatCard
+          description="Invoices already marked paid"
+          icon={ReceiptText}
+          title="Collected revenue"
+          value={formatCurrency(dashboard.collectedRevenue)}
+        />
+        <StatCard
+          description="Accepted proposals out of non-draft proposals"
+          icon={BarChart3}
+          title="Proposal win rate"
+          value={`${dashboard.proposalAcceptanceRate}%`}
+        />
+      </section>
 
       <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <Card>
@@ -82,12 +105,15 @@ export default async function DashboardPage() {
                 Create client
               </Link>
             </Button>
-            <Button asChild variant="secondary">
-              <Link href="/projects">
-                <FolderKanban className="h-4 w-4" />
-                Create project
-              </Link>
-            </Button>
+            <CreateProjectDialog
+              clients={clients.map((client) => ({ id: client.id, name: client.name }))}
+              trigger={
+                <Button variant="secondary">
+                  <FolderKanban className="h-4 w-4" />
+                  Create project
+                </Button>
+              }
+            />
             <Button asChild variant="secondary">
               <Link href="/projects">
                 <FilePlus2 className="h-4 w-4" />
@@ -122,6 +148,63 @@ export default async function DashboardPage() {
             {!dashboard.recentActivity.length ? (
               <p className="text-sm text-muted-foreground">Activity appears here as work moves forward.</p>
             ) : null}
+          </CardContent>
+        </Card>
+      </section>
+      <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Pipeline snapshot</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {dashboard.projectStatusCounts.length ? (
+              dashboard.projectStatusCounts.map((item) => {
+                const ratio = dashboard.activeProjects
+                  ? Math.max(12, Math.round((item.count / dashboard.activeProjects) * 100))
+                  : 12;
+
+                return (
+                  <div key={item.status} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <div className="font-medium capitalize text-foreground">
+                        {item.status.replace(/_/g, " ")}
+                      </div>
+                      <div className="text-muted-foreground">{item.count}</div>
+                    </div>
+                    <div className="h-2 rounded-full bg-secondary">
+                      <div className="h-2 rounded-full bg-primary" style={{ width: `${ratio}%` }} />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-muted-foreground">Project distribution appears here after the first active job is created.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="h-4 w-4" />
+              Upcoming deadlines
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {dashboard.projectsDueSoon.length ? (
+              dashboard.projectsDueSoon.map((project) => (
+                <div key={project.id} className="rounded-2xl border border-border/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-semibold">{project.name}</div>
+                      <div className="mt-1 text-sm text-muted-foreground">{project.client?.name ?? "Client project"}</div>
+                    </div>
+                    <div className="text-sm font-medium text-foreground">{formatDate(project.due_date)}</div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">No upcoming deadlines in the next seven days.</p>
+            )}
           </CardContent>
         </Card>
       </section>

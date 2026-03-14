@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FileStack, FolderKanban, ReceiptText } from "lucide-react";
 
 import { ArchiveClientButton } from "@/components/forms/archive-client-button";
+import { CreateProjectDialog } from "@/components/forms/create-project-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,16 @@ export default async function ClientDetailPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        actions={<ArchiveClientButton clientId={detail.client.id} />}
+        actions={
+          <>
+            <CreateProjectDialog
+              clients={[{ id: detail.client.id, name: detail.client.name }]}
+              defaultClientId={detail.client.id}
+              lockClient
+            />
+            <ArchiveClientButton clientId={detail.client.id} />
+          </>
+        }
         description={`${detail.client.contact_name} · ${detail.client.email}`}
         eyebrow="Client profile"
         title={detail.client.name}

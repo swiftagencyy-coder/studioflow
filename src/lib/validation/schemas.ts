@@ -5,14 +5,32 @@ export const loginSchema = z.object({
   password: z.string().min(8, "Use at least 8 characters.")
 });
 
+export const loginWithInviteSchema = loginSchema.extend({
+  inviteToken: z.string().min(8).optional()
+});
+
 export const registerSchema = z.object({
   email: z.string().email(),
   fullName: z.string().min(2, "Enter your full name."),
   password: z.string().min(8, "Use at least 8 characters.")
 });
 
+export const registerWithInviteSchema = registerSchema.extend({
+  inviteToken: z.string().min(8).optional()
+});
+
 export const agencySetupSchema = z.object({
   agencyName: z.string().min(2, "Add your studio or agency name.")
+});
+
+export const agencySettingsSchema = z.object({
+  brandPrimaryColor: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Use a hex color like #0F766E."),
+  name: z.string().min(2, "Add your agency name."),
+  portalHeadline: z.string().min(8, "Add a stronger client-facing headline.").max(120),
+  portalSubheadline: z.string().min(12, "Add a short supporting message.").max(220),
+  website: z.string().url("Enter a valid website URL.").optional().or(z.literal(""))
 });
 
 export const profileSchema = z.object({
@@ -97,6 +115,24 @@ export const revisionFormSchema = z.object({
   status: z.enum(["open", "in_review", "in_progress", "resolved"]).default("open"),
   title: z.string().min(2)
 });
+
+export const invitationFormSchema = z
+  .object({
+    clientId: z.string().uuid().optional(),
+    email: z.string().email(),
+    fullName: z.string().optional(),
+    role: z.enum(["team_member", "client"]),
+    title: z.string().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.role === "client" && !value.clientId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Select a client for client portal invitations.",
+        path: ["clientId"]
+      });
+    }
+  });
 
 export const invoiceFormSchema = z.object({
   amount: z.coerce.number().nonnegative(),

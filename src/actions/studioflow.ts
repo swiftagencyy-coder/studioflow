@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import type { ActionResult } from "@/actions/auth";
 import {
+  requireAgencyViewer,
   requireAgencyWorkspace,
   requireClientViewer,
   requireViewer
@@ -18,9 +19,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import {
   approvalDecisionWithRevisionSchema,
   approvalFormSchema,
+  agencySettingsSchema,
   clientFormSchema,
   fileMetadataSchema,
   invoiceFormSchema,
+  invitationFormSchema,
   onboardingSchema,
   projectFormSchema,
   proposalDecisionSchema,
@@ -51,6 +54,14 @@ function parseTagString(value?: string) {
 function buildAppUrl(path: string) {
   const env = getServerEnv();
   return new URL(path, env.NEXT_PUBLIC_APP_URL).toString();
+}
+
+function revalidateAgencyWorkspacePaths() {
+  revalidatePath("/dashboard");
+  revalidatePath("/clients");
+  revalidatePath("/projects");
+  revalidatePath("/portal");
+  revalidatePath("/settings");
 }
 
 async function logActivity(entry: TableInsert<"activity_logs">) {
@@ -92,9 +103,7 @@ async function getProjectNotificationData(projectId: string) {
 }
 
 function revalidateProjectPaths(projectId: string, clientId?: string | null) {
-  revalidatePath("/dashboard");
-  revalidatePath("/clients");
-  revalidatePath("/projects");
+  revalidateAgencyWorkspacePaths();
   revalidatePath(`/projects/${projectId}`);
   revalidatePath(`/projects/${projectId}/onboarding`);
   revalidatePath(`/projects/${projectId}/files`);
@@ -107,6 +116,189 @@ function revalidateProjectPaths(projectId: string, clientId?: string | null) {
 
   if (clientId) {
     revalidatePath(`/clients/${clientId}`);
+  }
+}
+
+export async function updateAgencySettingsAction(input: unknown): Promise<ActionResult> {
+  const parsed = agencySettingsSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid workspace settings.", success: false };
+  }
+
+  try {
+    const viewer = await requireAgencyViewer();
+
+    if (viewer.agencyMembership.role !== "agency_owner") {
+      return { error: "Only the agency owner can update workspace settings.", success: false };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase
+      .from("agencies")
+      .update({
+        brand_primary_color: parsed.data.brandPrimaryColor,
+        name: parsed.data.name,
+        portal_headline: parsed.data.portalHeadline,
+        portal_subheadline: parsed.data.portalSubheadline,
+        website: parsed.data.website || null
+      })
+      .eq("id", viewer.agencyMembership.agency_id);
+
+    if (error) {
+      throw error;
+    }
+
+    revalidateAgencyWorkspacePaths();
+
+    return { success: true };
+  } catch (error) {
+    return { error: getErrorMessage(error), success: false };
+  }
+}
+
+export async function createInvitationAction(input: unknown): Promise<ActionResult> {
+  const parsed = invitationFormSchema.safeParse(input);
+
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Invalid invitation details.", success: false };
+  }
+
+  try {
+    const viewer = await requireAgencyWorkspace();
+    const supabase = await createSupabaseServerClient();
+    const canInviteTeamMembers = viewer.agencyMembership.role === "agency_owner";
+    let clientName: string | null = null;
+
+    if (parsed.data.role === "team_member" && !canInviteTeamMembers) {
+      return {
+        error: "Only the agency owner can invite new team members.",
+        success: false
+      };
+    }
+
+    if (parsed.data.role === "client") {
+      const { data: client } = await supabase
+        .from("clients")
+        .select("id, name, agency_id, status")
+        .eq("id", parsed.data.clientId ?? "")
+        .maybeSingle();
+
+      if (!client || client.agency_id !== viewer.agencyMembership.agency_id) {
+        return { error: "Select a valid client before sending an invite.", success: false };
+      }
+
+      if (client.status !== "active") {
+        return { error: "Archived clients cannot receive new invitations.", success: false };
+      }
+
+      clientName = client.name;
+    }
+
+    const token = crypto.randomUUID();
+    const { error } = await supabase.from("workspace_invitations").insert({
+      agency_id: viewer.agencyMembership.agency_id,
+      client_id: parsed.data.role === "client" ? parsed.data.clientId ?? null : null,
+      email: parsed.data.email.toLowerCase(),
+      full_name: parsed.data.fullName || null,
+      invited_by: viewer.userId,
+      invited_role: parsed.data.role,
+      title: parsed.data.title || null,
+      token
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    await sendNotificationEmail({
+      html: renderNotificationTemplate({
+        ctaHref: buildAppUrl(`/invite/${token}`),
+        ctaLabel: parsed.data.role === "client" ? "Join client portal" : "Join workspace",
+        intro:
+          parsed.data.role === "client"
+            ? `${viewer.profile.full_name} invited you to the ${clientName ?? "client"} portal in StudioFlow.`
+            : `${viewer.profile.full_name} invited you to collaborate inside ${viewer.agencyMembership.agency?.name ?? "StudioFlow"}.`,
+        title: parsed.data.role === "client" ? "Client portal invitation" : "Team invitation"
+      }),
+      subject:
+        parsed.data.role === "client"
+          ? `StudioFlow: join the ${clientName ?? "client"} portal`
+          : `StudioFlow: join ${viewer.agencyMembership.agency?.name ?? "the workspace"}`,
+      to: [parsed.data.email]
+    });
+
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (error) {
+    return { error: getErrorMessage(error), success: false };
+  }
+}
+
+export async function revokeInvitationAction(invitationId: string): Promise<ActionResult> {
+  try {
+    const viewer = await requireAgencyWorkspace();
+
+    if (viewer.agencyMembership.role !== "agency_owner") {
+      return {
+        error: "Only the agency owner can revoke invitations.",
+        success: false
+      };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { data: invitation } = await supabase
+      .from("workspace_invitations")
+      .select("id, agency_id, status")
+      .eq("id", invitationId)
+      .maybeSingle();
+
+    if (!invitation || invitation.agency_id !== viewer.agencyMembership.agency_id) {
+      return { error: "Invitation not found.", success: false };
+    }
+
+    const { error } = await supabase
+      .from("workspace_invitations")
+      .update({
+        status: "revoked"
+      })
+      .eq("id", invitationId)
+      .eq("agency_id", viewer.agencyMembership.agency_id)
+      .eq("status", "pending");
+
+    if (error) {
+      throw error;
+    }
+
+    revalidatePath("/settings");
+
+    return { success: true };
+  } catch (error) {
+    return { error: getErrorMessage(error), success: false };
+  }
+}
+
+export async function acceptInvitationAction(token: string): Promise<ActionResult> {
+  try {
+    await requireViewer();
+    const supabase = await createSupabaseServerClient();
+    const { data: invitation, error } = await supabase.rpc("accept_workspace_invitation", {
+      invitation_token: token
+    });
+
+    if (error || !invitation) {
+      throw error ?? new Error("Invitation could not be accepted.");
+    }
+
+    revalidateAgencyWorkspacePaths();
+
+    return {
+      redirectTo: invitation.invited_role === "client" ? "/portal" : "/dashboard",
+      success: true
+    };
+  } catch (error) {
+    return { error: getErrorMessage(error), success: false };
   }
 }
 
@@ -214,11 +406,24 @@ export async function createProjectAction(input: unknown): Promise<ActionResult<
   try {
     const viewer = await requireAgencyWorkspace();
     const supabase = await createSupabaseServerClient();
+    const { data: client } = await supabase
+      .from("clients")
+      .select("id, agency_id, status")
+      .eq("id", parsed.data.clientId)
+      .maybeSingle();
+
+    if (!client || client.agency_id !== viewer.agencyMembership.agency_id) {
+      return { error: "Select a valid client before creating a project.", success: false };
+    }
+
+    if (client.status !== "active") {
+      return { error: "Archived clients cannot receive new projects.", success: false };
+    }
 
     const { data: project, error } = await supabase
       .from("projects")
       .insert({
-        agency_id: viewer.agencyMembership.agency_id,
+        agency_id: client.agency_id,
         client_id: parsed.data.clientId,
         created_by: viewer.userId,
         description: parsed.data.description || null,
@@ -794,29 +999,56 @@ export async function createRevisionRequestAction(
     const viewer = await requireViewer();
     const supabase = await createSupabaseServerClient();
     const notificationData = await getProjectNotificationData(projectId);
+    const { data: project } = await supabase
+      .from("projects")
+      .select("id, client_id")
+      .eq("id", projectId)
+      .maybeSingle();
+
+    if (!project) {
+      return { error: "Project not found or unavailable.", success: false };
+    }
+
+    if (parsed.data.approvalRequestId) {
+      const { data: approval } = await supabase
+        .from("approval_requests")
+        .select("id")
+        .eq("id", parsed.data.approvalRequestId)
+        .eq("project_id", projectId)
+        .maybeSingle();
+
+      if (!approval) {
+        return { error: "Select a valid approval request for this project.", success: false };
+      }
+    }
+
     const nextStatus = viewer.clientMembership ? "open" : parsed.data.status;
 
-    const { error } = await supabase.from("revision_requests").insert({
-      approval_request_id: parsed.data.approvalRequestId || null,
-      description: parsed.data.description,
-      priority: parsed.data.priority,
-      project_id: projectId,
-      status: nextStatus,
-      submitted_by: viewer.userId,
-      submitted_by_name: viewer.profile.full_name,
-      title: parsed.data.title
-    });
+    const { data: revision, error } = await supabase
+      .from("revision_requests")
+      .insert({
+        approval_request_id: parsed.data.approvalRequestId || null,
+        description: parsed.data.description,
+        priority: parsed.data.priority,
+        project_id: projectId,
+        status: nextStatus,
+        submitted_by: viewer.userId,
+        submitted_by_name: viewer.profile.full_name,
+        title: parsed.data.title
+      })
+      .select("id, project_id")
+      .single();
 
-    if (error) {
-      throw error;
+    if (error || !revision) {
+      throw error ?? new Error("Revision request could not be created.");
     }
 
     await logActivity({
       action: "revision_submitted",
       actor_name: viewer.profile.full_name,
       actor_user_id: viewer.userId,
-      client_id: notificationData?.client?.id ?? null,
-      entity_id: projectId,
+      client_id: project.client_id,
+      entity_id: revision.id,
       entity_type: "revision_request",
       message: `${viewer.profile.full_name} submitted a revision request.`,
       project_id: projectId,

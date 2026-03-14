@@ -1,10 +1,18 @@
 import { unstable_noStore as noStore } from "next/cache";
 
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { TableRow } from "@/types/database";
 
 type ProjectWithClient = TableRow<"projects"> & {
   client: TableRow<"clients"> | null;
+};
+
+type DashboardProject = Pick<
+  TableRow<"projects">,
+  "due_date" | "id" | "name" | "status"
+> & {
+  client: Pick<TableRow<"clients">, "name"> | null;
 };
 
 type AgencyMemberWithAgency = TableRow<"agency_members"> & {
@@ -13,6 +21,17 @@ type AgencyMemberWithAgency = TableRow<"agency_members"> & {
 
 type ClientUserWithClient = TableRow<"client_users"> & {
   client: TableRow<"clients"> | null;
+};
+
+type InvitationWithClient = TableRow<"workspace_invitations"> & {
+  client: Pick<TableRow<"clients">, "id" | "name"> | null;
+};
+
+type InvitationWithRelations = InvitationWithClient & {
+  agency: Pick<
+    TableRow<"agencies">,
+    "brand_primary_color" | "id" | "name" | "portal_headline" | "portal_subheadline" | "website"
+  > | null;
 };
 
 export type FileRecordWithUrl = TableRow<"uploaded_files"> & {
@@ -25,32 +44,89 @@ export async function getAgencyDashboardData(agencyMembership: AgencyMemberWithA
 
   const [
     { count: activeClients },
-    { count: activeProjects },
     { count: pendingApprovals },
-    { count: unpaidInvoices },
-    { data: recentActivity }
+    { data: recentActivity },
+    { data: projects },
+    { data: invoices },
+    { data: proposals }
   ] = await Promise.all([
     supabase.from("clients").select("*", { count: "exact", head: true }).eq("status", "active"),
-    supabase
-      .from("projects")
-      .select("*", { count: "exact", head: true })
-      .neq("status", "completed"),
     supabase.from("approval_requests").select("*", { count: "exact", head: true }).eq("status", "pending"),
-    supabase.from("invoices").select("*", { count: "exact", head: true }).in("status", ["draft", "sent", "overdue"]),
     supabase
       .from("activity_logs")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(8)
+      .limit(8),
+    supabase
+      .from("projects")
+      .select("id, name, status, due_date, client:clients(name)")
+      .eq("agency_id", agencyMembership.agency_id)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("invoices")
+      .select("amount, due_date, invoice_number, project_id, status")
+      .in("status", ["draft", "sent", "paid", "overdue"]),
+    supabase
+      .from("proposals")
+      .select("id, pricing_total, status")
+      .neq("status", "draft")
   ]);
+
+  const typedProjects = (projects ?? []) as unknown as DashboardProject[];
+  const activeProjects = typedProjects.filter((project) => project.status !== "completed").length;
+  const unpaidInvoices = (invoices ?? []).filter((invoice) => invoice.status !== "paid").length;
+  const openRevenue = (invoices ?? [])
+    .filter((invoice) => invoice.status === "sent" || invoice.status === "overdue")
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const collectedRevenue = (invoices ?? [])
+    .filter((invoice) => invoice.status === "paid")
+    .reduce((sum, invoice) => sum + invoice.amount, 0);
+  const totalNonDraftProposals = proposals?.length ?? 0;
+  const acceptedProposals = (proposals ?? []).filter((proposal) => proposal.status === "accepted").length;
+  const proposalAcceptanceRate = totalNonDraftProposals
+    ? Math.round((acceptedProposals / totalNonDraftProposals) * 100)
+    : 0;
+  const today = new Date();
+  const nextWeek = new Date(today);
+  nextWeek.setDate(today.getDate() + 7);
+  const dueSoonProjects = typedProjects
+    .filter((project) => {
+      if (!project.due_date || project.status === "completed") {
+        return false;
+      }
+
+      const dueDate = new Date(project.due_date);
+      return dueDate >= today && dueDate <= nextWeek;
+    })
+    .sort((left, right) => {
+      if (!left.due_date || !right.due_date) {
+        return 0;
+      }
+
+      return new Date(left.due_date).getTime() - new Date(right.due_date).getTime();
+    })
+    .slice(0, 5);
+  const projectStatusCounts = Object.entries(
+    typedProjects.reduce<Record<string, number>>((accumulator, project) => {
+      accumulator[project.status] = (accumulator[project.status] ?? 0) + 1;
+      return accumulator;
+    }, {})
+  )
+    .map(([status, count]) => ({ count, status }))
+    .sort((left, right) => right.count - left.count);
 
   return {
     activeClients: activeClients ?? 0,
-    activeProjects: activeProjects ?? 0,
+    activeProjects,
     agency: agencyMembership.agency,
+    collectedRevenue,
     pendingApprovals: pendingApprovals ?? 0,
+    projectStatusCounts,
+    projectsDueSoon: dueSoonProjects,
+    proposalAcceptanceRate,
     recentActivity: recentActivity ?? [],
-    unpaidInvoices: unpaidInvoices ?? 0
+    openRevenue,
+    unpaidInvoices
   };
 }
 
@@ -93,6 +169,26 @@ export async function getAgencyProjects(agencyId: string) {
     .order("created_at", { ascending: false });
 
   return (data as ProjectWithClient[] | null) ?? [];
+}
+
+export async function getAgencySettings(agencyId: string) {
+  noStore();
+  const supabase = await createSupabaseServerClient();
+  const [{ data: agency }, { data: invitations }, { data: clients }] = await Promise.all([
+    supabase.from("agencies").select("*").eq("id", agencyId).single(),
+    supabase
+      .from("workspace_invitations")
+      .select("*, client:clients(id, name)")
+      .eq("agency_id", agencyId)
+      .order("created_at", { ascending: false }),
+    supabase.from("clients").select("id, name, status").eq("agency_id", agencyId).order("name")
+  ]);
+
+  return {
+    agency,
+    clients: (clients ?? []).filter((client) => client.status === "active"),
+    invitations: (invitations as InvitationWithClient[] | null) ?? []
+  };
 }
 
 export async function getClientDetail(clientId: string) {
@@ -216,7 +312,10 @@ export async function getPortalOverview(clientMembership: ClientUserWithClient) 
   const supabase = await createSupabaseServerClient();
   const clientId = clientMembership.client_id;
 
-  const [{ data: projects }, { data: activity }] = await Promise.all([
+  const [{ data: agency }, { data: projects }, { data: activity }] = await Promise.all([
+    clientMembership.client?.agency_id
+      ? supabase.from("agencies").select("*").eq("id", clientMembership.client.agency_id).single()
+      : Promise.resolve({ data: null as TableRow<"agencies"> | null }),
     supabase
       .from("projects")
       .select("*, client:clients(*)")
@@ -263,6 +362,7 @@ export async function getPortalOverview(clientMembership: ClientUserWithClient) 
 
   return {
     activity: activity ?? [],
+    agency,
     approvals: approvals.data ?? [],
     client: clientMembership.client,
     files: await attachSignedUrls(files.data ?? []),
@@ -321,6 +421,18 @@ export async function getPortalApproval(approvalId: string) {
   }
 
   return { approval, file };
+}
+
+export async function getInvitationPreviewByToken(token: string) {
+  noStore();
+  const admin = createSupabaseAdminClient();
+  const { data: invitation } = await admin
+    .from("workspace_invitations")
+    .select("*, agency:agencies(id, name, brand_primary_color, portal_headline, portal_subheadline, website), client:clients(id, name)")
+    .eq("token", token)
+    .maybeSingle();
+
+  return invitation as InvitationWithRelations | null;
 }
 
 async function attachSignedUrls(files: TableRow<"uploaded_files">[]) {

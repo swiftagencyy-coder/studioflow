@@ -9,7 +9,7 @@ export function StatusBadge({
   const variant =
     value === "approved" || value === "accepted" || value === "paid" || value === "completed"
       ? "success"
-      : value === "rejected" || value === "overdue"
+      : value === "rejected" || value === "overdue" || value === "expired" || value === "revoked"
         ? "danger"
         : value === "review" || value === "pending" || value === "sent"
           ? "warning"

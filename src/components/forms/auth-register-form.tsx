@@ -15,7 +15,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerSchema } from "@/lib/validation/schemas";
 
-export function AuthRegisterForm() {
+export function AuthRegisterForm({
+  inviteToken
+}: {
+  inviteToken?: string;
+}) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const form = useForm<z.infer<typeof registerSchema>>({
@@ -30,7 +34,10 @@ export function AuthRegisterForm() {
   const onSubmit = form.handleSubmit((values) => {
     setIsPending(true);
     startTransition(async () => {
-      const result = await registerAction(values);
+      const result = await registerAction({
+        ...values,
+        inviteToken
+      });
       setIsPending(false);
 
       if (!result.success) {
@@ -72,7 +79,10 @@ export function AuthRegisterForm() {
       </Button>
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link className="font-semibold text-primary" href="/login">
+        <Link
+          className="font-semibold text-primary"
+          href={inviteToken ? `/login?invite=${inviteToken}` : "/login"}
+        >
           Sign in
         </Link>
       </p>

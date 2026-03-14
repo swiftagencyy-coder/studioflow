@@ -36,6 +36,7 @@ type ApprovalStatus = "pending" | "approved" | "changes_requested";
 type RevisionPriority = "low" | "medium" | "high" | "urgent";
 type RevisionStatus = "open" | "in_review" | "in_progress" | "resolved";
 type InvoiceStatus = "draft" | "sent" | "paid" | "overdue";
+type InvitationStatus = "pending" | "accepted" | "revoked" | "expired";
 type ActivityAction =
   | "client_created"
   | "client_updated"
@@ -71,6 +72,7 @@ export type Database = {
       file_category: FileCategory;
       file_visibility: FileVisibility;
       invoice_status: InvoiceStatus;
+      invitation_status: InvitationStatus;
       project_status: ProjectStatus;
       proposal_status: ProposalStatus;
       revision_priority: RevisionPriority;
@@ -80,6 +82,10 @@ export type Database = {
       bootstrap_agency_owner: {
         Args: { input_agency_name: string };
         Returns: string;
+      };
+      accept_workspace_invitation: {
+        Args: { invitation_token: string };
+        Returns: Database["public"]["Tables"]["workspace_invitations"]["Row"];
       };
       respond_to_approval: {
         Args: { decision: ApprovalStatus; response_body?: string | null; target_approval_id: string };
@@ -138,30 +144,42 @@ export type Database = {
       agencies: TableDefinition<
         {
           archived_at: string | null;
+          brand_primary_color: string;
           created_at: string;
           id: string;
           name: string;
           owner_user_id: string | null;
+          portal_headline: string | null;
+          portal_subheadline: string | null;
           slug: string;
           updated_at: string;
+          website: string | null;
         },
         {
           archived_at?: string | null;
+          brand_primary_color?: string;
           created_at?: string;
           id?: string;
           name: string;
           owner_user_id?: string | null;
+          portal_headline?: string | null;
+          portal_subheadline?: string | null;
           slug: string;
           updated_at?: string;
+          website?: string | null;
         },
         Partial<{
           archived_at: string | null;
+          brand_primary_color: string;
           created_at: string;
           id: string;
           name: string;
           owner_user_id: string | null;
+          portal_headline: string | null;
+          portal_subheadline: string | null;
           slug: string;
           updated_at: string;
+          website: string | null;
         }>
       >;
       agency_members: TableDefinition<
@@ -703,6 +721,53 @@ export type Database = {
           uploaded_by: string | null;
           uploader_name: string;
           visibility: FileVisibility;
+        }>
+      >;
+      workspace_invitations: TableDefinition<
+        {
+          accepted_at: string | null;
+          agency_id: string;
+          client_id: string | null;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          full_name: string | null;
+          id: string;
+          invited_by: string | null;
+          invited_role: AppRole;
+          status: InvitationStatus;
+          title: string | null;
+          token: string;
+        },
+        {
+          accepted_at?: string | null;
+          agency_id: string;
+          client_id?: string | null;
+          created_at?: string;
+          email: string;
+          expires_at?: string;
+          full_name?: string | null;
+          id?: string;
+          invited_by?: string | null;
+          invited_role: AppRole;
+          status?: InvitationStatus;
+          title?: string | null;
+          token: string;
+        },
+        Partial<{
+          accepted_at: string | null;
+          agency_id: string;
+          client_id: string | null;
+          created_at: string;
+          email: string;
+          expires_at: string;
+          full_name: string | null;
+          id: string;
+          invited_by: string | null;
+          invited_role: AppRole;
+          status: InvitationStatus;
+          title: string | null;
+          token: string;
         }>
       >;
     };

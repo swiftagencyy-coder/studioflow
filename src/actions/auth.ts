@@ -1,11 +1,12 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getViewerHomePath, getViewerContext } from "@/lib/auth/context";
 import {
   agencySetupSchema,
-  loginSchema,
-  registerSchema
+  loginWithInviteSchema,
+  registerWithInviteSchema
 } from "@/lib/validation/schemas";
 
 export type ActionResult<T = void> = {
@@ -18,7 +19,7 @@ export type ActionResult<T = void> = {
 export async function loginAction(
   input: unknown
 ): Promise<ActionResult<{ message?: string }>> {
-  const parsed = loginSchema.safeParse(input);
+  const parsed = loginWithInviteSchema.safeParse(input);
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid credentials.", success: false };
@@ -37,7 +38,11 @@ export async function loginAction(
   const viewer = await getViewerContext();
 
   return {
-    redirectTo: viewer ? getViewerHomePath(viewer) : "/dashboard",
+    redirectTo: parsed.data.inviteToken
+      ? `/invite/${parsed.data.inviteToken}`
+      : viewer
+        ? getViewerHomePath(viewer)
+        : "/dashboard",
     success: true
   };
 }
@@ -45,10 +50,34 @@ export async function loginAction(
 export async function registerAction(
   input: unknown
 ): Promise<ActionResult<{ message?: string }>> {
-  const parsed = registerSchema.safeParse(input);
+  const parsed = registerWithInviteSchema.safeParse(input);
 
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Invalid sign up details.", success: false };
+  }
+
+  let defaultRole: "agency_owner" | "team_member" | "client" = "agency_owner";
+
+  if (parsed.data.inviteToken) {
+    const admin = createSupabaseAdminClient();
+    const { data: invitation } = await admin
+      .from("workspace_invitations")
+      .select("email, invited_role, status")
+      .eq("token", parsed.data.inviteToken)
+      .maybeSingle();
+
+    if (!invitation || invitation.status !== "pending") {
+      return { error: "This invitation is no longer available.", success: false };
+    }
+
+    if (invitation.email.toLowerCase() !== parsed.data.email.toLowerCase()) {
+      return {
+        error: "Use the same email address that received the invitation.",
+        success: false
+      };
+    }
+
+    defaultRole = invitation.invited_role === "team_member" ? "team_member" : "client";
   }
 
   const supabase = await createSupabaseServerClient();
@@ -57,7 +86,7 @@ export async function registerAction(
     password: parsed.data.password,
     options: {
       data: {
-        default_role: "agency_owner",
+        default_role: defaultRole,
         full_name: parsed.data.fullName
       }
     }
@@ -74,7 +103,13 @@ export async function registerAction(
           message:
             "Check your inbox to confirm your account, then continue into StudioFlow."
         },
-    redirectTo: data.session ? "/setup" : "/login",
+    redirectTo: data.session
+      ? parsed.data.inviteToken
+        ? `/invite/${parsed.data.inviteToken}`
+        : "/setup"
+      : parsed.data.inviteToken
+        ? `/login?invite=${parsed.data.inviteToken}`
+        : "/login",
     success: true
   };
 }

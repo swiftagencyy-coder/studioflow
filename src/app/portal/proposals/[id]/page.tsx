@@ -2,6 +2,7 @@ import { ProposalResponseForm } from "@/components/forms/proposal-response-form"
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { requireViewer } from "@/lib/auth/context";
 import { getPortalProposal } from "@/lib/data/studioflow";
 import { formatCurrency } from "@/lib/utils";
 
@@ -11,6 +12,8 @@ export default async function PortalProposalPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const viewer = await requireViewer();
+  const isClientViewer = Boolean(viewer.clientMembership);
   const { items, proposal } = await getPortalProposal(id);
 
   if (!proposal) {
@@ -21,7 +24,7 @@ export default async function PortalProposalPage({
     <div className="space-y-6">
       <PageHeader
         description={proposal.timeline}
-        eyebrow="Proposal"
+        eyebrow={isClientViewer ? "Proposal" : "Proposal preview"}
         title={proposal.title}
       />
       <section className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
@@ -54,10 +57,18 @@ export default async function PortalProposalPage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Respond</CardTitle>
+            <CardTitle>{isClientViewer ? "Respond" : "Preview mode"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <ProposalResponseForm proposalId={proposal.id} />
+            {isClientViewer && proposal.status === "sent" ? (
+              <ProposalResponseForm proposalId={proposal.id} />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {isClientViewer
+                  ? "This proposal has already been responded to and is now read-only."
+                  : "Client response controls are disabled while you preview the portal."}
+              </p>
+            )}
           </CardContent>
         </Card>
       </section>

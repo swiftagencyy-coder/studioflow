@@ -23,9 +23,13 @@ import { revisionPriorityOptions } from "@/lib/constants";
 import { revisionFormSchema } from "@/lib/validation/schemas";
 
 export function RevisionRequestForm({
-  projectId
+  approvalRequestId,
+  projectId,
+  submitLabel = "Add revision request"
 }: {
+  approvalRequestId?: string;
   projectId: string;
+  submitLabel?: string;
 }) {
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
@@ -44,7 +48,13 @@ export function RevisionRequestForm({
     resolver: zodResolver(revisionFormSchema)
   });
 
-  const onSubmit = form.handleSubmit((values) => {
+  const onSubmit = form.handleSubmit(() => {
+    const values = {
+      ...form.getValues(),
+      approvalRequestId,
+      status: "open" as const
+    };
+
     setIsPending(true);
     startTransition(async () => {
       const result = await createRevisionRequestAction(projectId, values);
@@ -56,7 +66,13 @@ export function RevisionRequestForm({
       }
 
       toast.success("Revision request added.");
-      form.reset();
+      form.reset({
+        approvalRequestId,
+        description: "",
+        priority: "medium",
+        status: "open",
+        title: ""
+      });
       router.refresh();
     });
   });
@@ -95,7 +111,7 @@ export function RevisionRequestForm({
         <Textarea id="revision-description" {...form.register("description")} />
       </div>
       <Button disabled={isPending} type="submit">
-        {isPending ? "Saving..." : "Add revision request"}
+        {isPending ? "Saving..." : submitLabel}
       </Button>
     </form>
   );

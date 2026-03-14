@@ -3,6 +3,7 @@ import {
   BriefcaseBusiness,
   FolderKanban,
   LayoutDashboard,
+  Settings2,
   Users
 } from "lucide-react";
 
@@ -50,6 +51,11 @@ export const revisionStatusOptions = [
   { value: "resolved", label: "Resolved" }
 ] as const;
 
+export const invitationRoleOptions = [
+  { value: "team_member", label: "Team member" },
+  { value: "client", label: "Client" }
+] as const;
+
 export const fileCategoryOptions = [
   { value: "logo", label: "Logos" },
   { value: "brand_asset", label: "Brand assets" },
@@ -79,7 +85,8 @@ export const appSidebarItems: SidebarItem[] = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/clients", icon: Users, label: "Clients" },
   { href: "/projects", icon: FolderKanban, label: "Projects" },
-  { href: "/portal", icon: BriefcaseBusiness, label: "Client portal" }
+  { href: "/portal", icon: BriefcaseBusiness, label: "Client portal" },
+  { href: "/settings", icon: Settings2, label: "Settings" }
 ];
 
 export const portalSidebarItems: SidebarItem[] = [

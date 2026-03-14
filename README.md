@@ -17,9 +17,12 @@ StudioFlow is a production-ready MVP client portal for freelancers, agencies, an
 
 - Agency owner, team member, and client roles
 - Agency dashboard with active client/project metrics and recent activity
+- Workspace settings with agency branding and portal messaging
 - Client management with archive flow and linked records
 - Project workspaces for onboarding, files, proposals, approvals, revisions, and invoices
 - Client portal with project-by-project visibility
+- Invite-based team and client onboarding
+- Search and status filters for client and project directories
 - Email notifications for onboarding requests, proposal sends, approval requests, revision submissions, and invoice updates
 - Activity log for major actions
 
@@ -75,6 +78,8 @@ supabase/
 - `/portal/projects/[id]`
 - `/portal/proposals/[id]`
 - `/portal/approvals/[id]`
+- `/settings`
+- `/invite/[token]`
 
 ## Database and security
 
@@ -82,15 +87,20 @@ The schema lives in:
 
 - `supabase/migrations/20260313224500_initial_schema.sql`
 - `supabase/migrations/20260313224600_rls_and_storage.sql`
+- `supabase/migrations/20260314113000_growth_features.sql`
+- `supabase/migrations/20260314124500_invitation_permission_hardening.sql`
 
 Security decisions:
 
 - Internal-only fields are split into `client_private_details` and `project_private_details` so clients never receive those columns.
 - RLS is enabled and forced on every application table.
 - Storage object paths are validated against agency/project/client folder structure before access is allowed.
+- Workspace invitations are stored in Postgres and accepted through a security-definer function that validates token, email, and role before creating memberships.
+- Team member invitations can only be created, revoked, or mutated by the agency owner at the database policy layer.
 - Client responses that should not mutate arbitrary columns use SQL RPC functions:
   - `app.respond_to_proposal`
   - `app.respond_to_approval`
+  - `app.accept_workspace_invitation`
 - Registration bootstrap for agency owners uses `app.bootstrap_agency_owner`.
 
 Storage buckets:
@@ -204,20 +214,20 @@ The demo script in `scripts/seed-demo.ts` creates:
 - approval requests
 - revision requests
 - invoices
+- pending workspace invitations
 - activity logs
 
 ## Assumptions
 
 - Internal users belong to exactly one agency in the MVP.
 - Client users belong to exactly one client account in the MVP.
-- Invitations and billing subscriptions are future extensions, not part of the current launch scope.
+- Billing subscriptions are still a future extension; the app is now invitation-ready for both internal teams and clients.
 - Invoice tracking is status-based and Stripe-ready, not a full accounting workflow.
 
 ## Future improvements
 
 - Stripe subscription and usage billing
-- Invite-based client and team onboarding
 - Comment threads on files and approvals
 - Reusable onboarding templates
-- Agency branding customization in the client portal
-- Search, filtering, and dashboard charts
+- White-label domains and custom sender branding
+- Automation rules for reminders, nudges, and overdue follow-up

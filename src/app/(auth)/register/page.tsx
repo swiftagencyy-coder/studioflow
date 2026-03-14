@@ -3,8 +3,13 @@ import { redirect } from "next/navigation";
 import { AuthRegisterForm } from "@/components/forms/auth-register-form";
 import { getViewerContext, getViewerHomePath } from "@/lib/auth/context";
 
-export default async function RegisterPage() {
+export default async function RegisterPage({
+  searchParams
+}: {
+  searchParams: Promise<{ invite?: string }>;
+}) {
   const viewer = await getViewerContext();
+  const { invite } = await searchParams;
 
   if (viewer) {
     redirect(getViewerHomePath(viewer));
@@ -15,10 +20,12 @@ export default async function RegisterPage() {
       <div className="space-y-2">
         <h1 className="font-serif text-4xl font-semibold">Create your StudioFlow workspace</h1>
         <p className="text-sm leading-7 text-muted-foreground">
-          Start with an agency owner account, then configure your workspace and invite clients later.
+          {invite
+            ? "Use the invited email address to create your account and accept the invitation after sign up."
+            : "Start with an agency owner account, then configure your workspace and invite clients later."}
         </p>
       </div>
-      <AuthRegisterForm />
+      <AuthRegisterForm inviteToken={invite} />
     </div>
   );
 }
